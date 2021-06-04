@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #include "node.h"
+#include "cache.h"
 
 static struct fs_meta meta;
 static FILE* fd;
