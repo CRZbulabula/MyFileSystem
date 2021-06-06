@@ -33,9 +33,15 @@ void read_inode(struct fs_inode *inode, off_t off, FILE* fd)
 
 void save_inode(struct fs_inode *inode, FILE* fd)
 {
+	//fseek(fd, 0, SEEK_END); //定位到文件末 
+	//printf("file size %d\n", ftell(fd));
+	//if(ftell(fd) == )
 	printf("save inode: %s Block: %d\n", inode->path, inode->off * BLOCKSIZE);
 	fseek(fd, inode->off * BLOCKSIZE, SEEK_SET);
+	//printf("write size %d, stat size %d\n", sizeof(struct fs_inode), sizeof(struct stat));
 	fwrite((void *) inode, sizeof(struct fs_inode), 1, fd);
+	//fseek(fd, 0, SEEK_END); //定位到文件末 
+	//printf("file size %d\n", ftell(fd));
 	fflush(fd);
 	fsync(fd);
 }
@@ -51,8 +57,10 @@ void fs_init_inode(struct fs_inode* inode)
 struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 {
 	struct fs_inode* inode = &(meta->root);
+	
 	const char delim[2] = "/\0";
 	char *subPath = strtok(path, delim);
+	bool at_root = true;
 	while (subPath != NULL) {
 		printf("search path: %s\n", subPath);
 		if (strcmp(subPath, "tmp") == 0 || strcmp(subPath, "disk") == 0) {
@@ -65,11 +73,13 @@ struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 		for (i = 0; i < MAX_INODE; i++) {
 			printf("child path: %s child off: %d\n", inode->childPath[i], inode->childOff[i]);
 			if (strcmp(subPath, inode->childPath[i]) == 0) {
-				struct fs_inode next;
-				fs_init_inode(&next);
-				read_inode(&next, inode->childOff[i], fd);
-				printf("next: %s %d %s %d\n", next.path, next.off, next.childPath[0], next.childOff[0]);
-				inode = &next;
+				struct fs_inode* next = (struct fs_inode *)malloc(sizeof(struct fs_inode));
+				fs_init_inode(next);
+				read_inode(next, inode->childOff[i], fd);
+				printf("next: %s %d %s %d\n", next->path, next->off, next->childPath[0], next->childOff[0]);
+				if (!at_root)
+					free(inode);
+				inode = next;
 				searchFlag = true;
 				break;
 			}
@@ -77,7 +87,7 @@ struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 		if (!searchFlag) {
 			return -1;
 		}
-
+		at_root = false;
 		subPath = strtok(NULL, delim);
 	}
 
@@ -130,5 +140,9 @@ void fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 			
 			break;
 		}
+	}
+
+	if (last) {
+		free(father);
 	}
 }
