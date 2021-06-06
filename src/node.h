@@ -7,7 +7,7 @@
 #include "def.h"
 
 struct fs_inode {
-	off_t off;
+	off_t off, parent;
 
 	char path[MAX_NAME];
 	char childPath[MAX_INODE][MAX_NAME];
@@ -24,6 +24,8 @@ struct fs_meta {
 };
 
 void save_meta(struct fs_meta* meta, FILE* fd);
+void read_inode(struct fs_inode *inode, off_t off, FILE* fd);
+void save_inode(struct fs_inode *inode, FILE* fd);
 void fs_init_inode(struct fs_inode* inode);
 struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd);
 void fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd);

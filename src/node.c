@@ -9,24 +9,35 @@
 
 #include "node.h"
 
+void read_meta(struct fs_meta* meta, FILE* fd)
+{
+	fseek(fd, 0, SEEK_SET);
+	fread((void *) meta, sizeof(struct fs_meta), 1, fd);
+}
+
 void save_meta(struct fs_meta* meta, FILE* fd)
 {
 	printf("save meta block: %d\n", meta->blcokUsed);
 	fseek(fd, 0, SEEK_SET);
 	fwrite((void *) meta, sizeof(struct fs_meta), 1, fd);
+	fflush(fd);
+	fsync(fd);
 }
 
 void read_inode(struct fs_inode *inode, off_t off, FILE* fd)
 {
 	fseek(fd, off * BLOCKSIZE, SEEK_SET);
 	fread((void *) inode, sizeof(struct fs_inode), 1, fd);
+	printf("read inode: %s Block: %d\n", inode->path, off * BLOCKSIZE);
 }
 
 void save_inode(struct fs_inode *inode, FILE* fd)
 {
-	printf("save inode: %s\n", inode->path);
+	printf("save inode: %s Block: %d\n", inode->path, inode->off * BLOCKSIZE);
 	fseek(fd, inode->off * BLOCKSIZE, SEEK_SET);
 	fwrite((void *) inode, sizeof(struct fs_inode), 1, fd);
+	fflush(fd);
+	fsync(fd);
 }
 
 void fs_init_inode(struct fs_inode* inode)
@@ -34,7 +45,7 @@ void fs_init_inode(struct fs_inode* inode)
 	bzero(inode->path, sizeof(inode->path));
 	bzero(inode->childPath, sizeof(inode->childPath));
 	memset(inode->childOff, -1, sizeof(inode->childOff));
-	inode->off = -1;
+	inode->off = inode->parent = -1;
 }
 
 struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
@@ -43,6 +54,7 @@ struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 	const char delim[2] = "/\0";
 	char *subPath = strtok(path, delim);
 	while (subPath != NULL) {
+		printf("search path: %s\n", subPath);
 		if (strcmp(subPath, "tmp") == 0 || strcmp(subPath, "disk") == 0) {
 			subPath = strtok(NULL, delim);
 			continue;
@@ -51,12 +63,15 @@ struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 		int i;
 		bool searchFlag = false;
 		for (i = 0; i < MAX_INODE; i++) {
+			printf("child path: %s child off: %d\n", inode->childPath[i], inode->childOff[i]);
 			if (strcmp(subPath, inode->childPath[i]) == 0) {
 				struct fs_inode next;
 				fs_init_inode(&next);
 				read_inode(&next, inode->childOff[i], fd);
+				printf("next: %s %d %s %d\n", next.path, next.off, next.childPath[0], next.childOff[0]);
 				inode = &next;
 				searchFlag = true;
+				break;
 			}
 		}
 		if (!searchFlag) {

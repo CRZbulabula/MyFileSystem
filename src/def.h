@@ -4,7 +4,7 @@
 #define BLOCKSIZE   (1024UL * 4)
 
 #define MAX_NAME    16
-#define MAX_INODE   64
+#define MAX_INODE   5
 #define MAX_DATA    500
 #define MAX_BLOCKS  (1024UL * 1024)
 
