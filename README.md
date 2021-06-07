@@ -15,7 +15,7 @@ simple fuse file system
 
 ## COMMAND
 + `touch {fileName}`新建文件
-+ `echo "{text}">{fileName}`写入数据
++ `echo "{text}">{fileName}`写入数据，若文件不存在自动创建
 + `cat {fileName}`读取文件中的所有数据
 + `mkdir {dirName}`新建目录
 + `mv {oldName} {newName}`进行重命名，只支持当前目录下某个文件或目录的重命名
