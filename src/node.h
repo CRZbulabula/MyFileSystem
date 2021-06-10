@@ -19,11 +19,12 @@ struct fs_inode {
 	char padding[312];
 };
 
+// TODO: 所有类型的块都应该是4096Byte，不够的加padding如上
+//这里fs_meta包含fs_inode，比较难办。好在现在超出4096的部分全在 fs_inode root 的 padding里，所以正确性不会出错
 struct fs_meta {
 	struct statvfs statv;
+	//u32 blockUsed;//使用alloc/unalloc来分配块
 	struct fs_inode root;
-	u32 blockUsed;
-
 	//char padding[192];
 };
 

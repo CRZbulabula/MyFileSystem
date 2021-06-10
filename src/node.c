@@ -29,17 +29,16 @@ void read_meta(struct fs_meta* meta, FILE* fd)
 {
 	//fseek(fd, 0, SEEK_SET);
 	//fread((void *) meta, sizeof(struct fs_meta), 1, fd);
-	read_block_at(0, (void*) &meta);
+	read_block(get_root_dir_inode_id(), (void*) &meta);
 }
 
 void save_meta(struct fs_meta* meta, FILE* fd)
 {
-	printf("save meta (at %u first v = %d), total block: %d\n", (uint32_t) meta, ((char*)meta)[0], meta->blockUsed);
 	//((char*)meta)[0] = 1;
 	//fseek(fd, 0, SEEK_SET);
 	//fwrite((void *) meta, sizeof(struct fs_meta), 1, fd);
 	//fflush(fd);
-	write_block_at(0, meta);
+	write_block(get_root_dir_inode_id(), meta);
 	//fsync(fd);
 }
 
@@ -47,7 +46,7 @@ void read_inode(struct fs_inode *inode, off_t off, FILE* fd)
 {
 	//fseek(fd, off * BLOCKSIZE, SEEK_SET);
 	//fread((void *) inode, sizeof(struct fs_inode), 1, fd);
-	read_block_at(off, inode);
+	read_block(off, inode);
 	printf("read inode: %s Block: %lld\n", inode->path, off * BLOCKSIZE);
 }
 
@@ -60,7 +59,7 @@ void save_inode(struct fs_inode *inode, FILE* fd)
 	//fseek(fd, inode->off * BLOCKSIZE, SEEK_SET);
 	//printf("write size %d, stat size %d\n", sizeof(struct fs_inode), sizeof(struct stat));
 	//fwrite((void *) inode, sizeof(struct fs_inode), 1, fd);
-	write_block_at(inode->off, inode);
+	write_block(inode->off, inode);
 	//fseek(fd, 0, SEEK_END); //定位到文件末 
 	//printf("file size %d\n", ftell(fd));
 	//fflush(fd);
@@ -213,7 +212,8 @@ int fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 	for (i = 0; i < MAX_INODE; i++) {
 		if (father->childOff[i] == -1) {
 			strcpy(father->childPath[i], childPath);
-			father->childOff[i] = meta->blockUsed++;
+			father->childOff[i] = alloc_inode();
+			printf("new child off = %d\n", father->childOff[i]);
 			strcpy(child.path, childPath);
 			
 			child.parent = father->off;
@@ -222,21 +222,26 @@ int fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 			child.vstat.st_size = 0;
 
 			if (mode & S_IFREG) {
-				child.data = meta->blockUsed;
+				int alloced_now = alloc_dnode();
+				int alloced_last = -1;
+				child.data = alloced_now;
 				for (j = 0; j < DATA_BLOCK_SET; j++) {
 					struct fs_cache cache;
 					fs_init_cache(&cache);
 					if (j) {
-						cache.prev = meta->blockUsed - 1;
+						cache.prev = alloced_last;
 					} else {
 						cache.prev = -1;
 					}
 					if (j < DATA_BLOCK_SET - 1) {
-						cache.next = meta->blockUsed + 1;
+						cache.next = alloced_now + 1; //TODO:分配不一定连续(硬盘紧张时)，所以这里之后要改
+						//不过应该是整段改成“不要创建文件时分配一堆block”，所以其实也不用单独改上面这句
 					} else {
 						cache.next = -1;
 					}
-					cache.off = meta->blockUsed++;
+					cache.off = alloced_now;
+					alloced_last = alloced_now;
+					alloced_now = alloc_dnode();
 					save_cache(&cache, fd);
 				}
 			}

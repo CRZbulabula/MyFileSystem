@@ -1,6 +1,7 @@
 #define FUSE_USE_VERSION 26
 
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <error.h>
@@ -110,6 +111,7 @@ static int fs_mkdir(const char *path, mode_t mode)
 	strcpy(dirPath, path);
 	dirPath[strlen(path)] = '\0';
 	fs_create_file(&meta, dirPath, S_IFDIR | 0755 | mode, fd);
+	fsync_rust();
 	return 0;
 }
 
@@ -150,7 +152,7 @@ static int fs_rmdir(const char *path)
 	} else {
 		save_meta(&meta, fd);
 	}
-	
+	fsync_rust();
 	return 0;
 }
 
@@ -269,7 +271,7 @@ static int fs_rename(const char* path, const char* path_new)
 		save_meta(&meta, fd);
 	}
 	save_inode(inode, fd);
-
+	fsync_rust();
 	return 0;
 }
 
@@ -346,6 +348,7 @@ static int fs_read(const char *path,
 	printf("fs_read: %s, size: %ld, off: %lld, res: %s\n", path, size, offset, resBuf);
 
 	strcpy(buf, resBuf);
+	fsync_rust();
 	return size;
 }
 
@@ -378,7 +381,7 @@ static int fs_write(const char *path,
 	}
 	fs_update_time(inode, U_ALL);
 	save_inode(inode, fd);
-
+	fsync_rust();
 	return size;
 }
 
@@ -433,8 +436,10 @@ static struct fuse_operations fs_ops = {
 void init_fs_meta()
 {
 	printf("init meta\n");
-	if (access("/tmp/disk/data", F_OK) != 0) {
+	//if (access("/tmp/disk/data", F_OK) != 0) {
+	if(check_file_system_existed() == -1) {
 		printf("data file not exist\n");
+		/*
 		fd = fopen("/tmp/data", "wb+");
 		printf("data file created\n");
 		meta.blockUsed = 2;
@@ -443,14 +448,24 @@ void init_fs_meta()
 		//struct fs_meta* meta0 = (struct fs_meta *) malloc(sizeof(struct fs_meta));
 		save_meta(&meta, fd);
 		//save_meta(meta0, fd);
+		*/
+		fs_init_inode(&meta.root);
+		int root_dir_inode_id = get_root_dir_inode_id();
+		write_block(root_dir_inode_id, &meta); //文件系统不存在，需要创建
+		fsync_rust(); //同步到盘上
 		return;
+		
 	}
 
 	printf("data file exist\n");
+	int root_dir_inode_id = get_root_dir_inode_id();
+	read_block(root_dir_inode_id, &meta); //文件系统已存在，读取即可
+	/*
 	fd = fopen("/tmp/disk/data", "rb+");
 	fseek(fd, 0, SEEK_SET);
 	fread((void *) &meta, sizeof(struct fs_meta), 1, fd);
 	printf("blockUsed: %d\n", meta.blockUsed);
+	*/
 }
 
 int main(int argc, char* argv[])
@@ -461,6 +476,9 @@ int main(int argc, char* argv[])
 	printf("meta size: %ld\n", sizeof(struct fs_meta));
 	printf("inode size: %ld\n", sizeof(struct fs_inode));
 	printf("cache size: %ld\n", sizeof(struct fs_cache));
+	//assert(sizeof(struct fs_meta) == BLOCKSIZE);//目前fs_meta由于包含fs_inode,稍微大于fs_inode，不过没有正确性问题
+	assert(sizeof(struct fs_inode) == BLOCKSIZE);
+	assert(sizeof(struct fs_cache) == BLOCKSIZE);
 	init_fs_meta();
 
 	int retCode = fuse_main(argc, argv, &fs_ops, NULL);
