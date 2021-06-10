@@ -16,13 +16,15 @@ struct fs_inode {
 	off_t childOff[MAX_INODE];
 
 	struct stat vstat;
+	//char padding[312];
 };
 
 struct fs_meta {
 	struct fs_inode root;
-	u32 blcokUsed;
+	u32 blockUsed;
 
 	struct statvfs statv;
+	//char padding[192];
 };
 
 void save_meta(struct fs_meta* meta, FILE* fd);

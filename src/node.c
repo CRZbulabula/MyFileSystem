@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "node.h"
+#include "linker.h"
 
 void fs_update_time(struct fs_inode* inode, int which)
 {
@@ -26,23 +27,27 @@ void fs_update_time(struct fs_inode* inode, int which)
 
 void read_meta(struct fs_meta* meta, FILE* fd)
 {
-	fseek(fd, 0, SEEK_SET);
-	fread((void *) meta, sizeof(struct fs_meta), 1, fd);
+	//fseek(fd, 0, SEEK_SET);
+	//fread((void *) meta, sizeof(struct fs_meta), 1, fd);
+	read_block_at(0, (void*) &meta);
 }
 
 void save_meta(struct fs_meta* meta, FILE* fd)
 {
-	printf("save meta, total block: %d\n", meta->blcokUsed);
-	fseek(fd, 0, SEEK_SET);
-	fwrite((void *) meta, sizeof(struct fs_meta), 1, fd);
-	fflush(fd);
+	printf("save meta (at %u first v = %d), total block: %d\n", (uint32_t) meta, ((char*)meta)[0], meta->blockUsed);
+	//((char*)meta)[0] = 1;
+	//fseek(fd, 0, SEEK_SET);
+	//fwrite((void *) meta, sizeof(struct fs_meta), 1, fd);
+	//fflush(fd);
+	write_block_at(0, meta);
 	//fsync(fd);
 }
 
 void read_inode(struct fs_inode *inode, off_t off, FILE* fd)
 {
-	fseek(fd, off * BLOCKSIZE, SEEK_SET);
-	fread((void *) inode, sizeof(struct fs_inode), 1, fd);
+	//fseek(fd, off * BLOCKSIZE, SEEK_SET);
+	//fread((void *) inode, sizeof(struct fs_inode), 1, fd);
+	read_block_at(off, inode);
 	printf("read inode: %s Block: %lld\n", inode->path, off * BLOCKSIZE);
 }
 
@@ -52,12 +57,13 @@ void save_inode(struct fs_inode *inode, FILE* fd)
 	//printf("file size %d\n", ftell(fd));
 	//if(ftell(fd) == )
 	printf("save inode: %s Block: %lld\n", inode->path, inode->off * BLOCKSIZE);
-	fseek(fd, inode->off * BLOCKSIZE, SEEK_SET);
+	//fseek(fd, inode->off * BLOCKSIZE, SEEK_SET);
 	//printf("write size %d, stat size %d\n", sizeof(struct fs_inode), sizeof(struct stat));
-	fwrite((void *) inode, sizeof(struct fs_inode), 1, fd);
+	//fwrite((void *) inode, sizeof(struct fs_inode), 1, fd);
+	write_block_at(inode->off, inode);
 	//fseek(fd, 0, SEEK_END); //定位到文件末 
 	//printf("file size %d\n", ftell(fd));
-	fflush(fd);
+	//fflush(fd);
 	//fsync(fd);
 }
 
@@ -141,11 +147,12 @@ struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
 	bool at_root = true;
 	while (subPath != NULL) {
 		printf("search path: %s\n", subPath);
+		/*
 		if (strcmp(subPath, "tmp") == 0 || strcmp(subPath, "disk") == 0) {
 			subPath = strtok(NULL, delim);
 			continue;
 		}
-
+		*/
 		int i;
 		bool searchFlag = false;
 		for (i = 0; i < MAX_INODE; i++) {
@@ -206,7 +213,7 @@ int fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 	for (i = 0; i < MAX_INODE; i++) {
 		if (father->childOff[i] == -1) {
 			strcpy(father->childPath[i], childPath);
-			father->childOff[i] = meta->blcokUsed++;
+			father->childOff[i] = meta->blockUsed++;
 			strcpy(child.path, childPath);
 			
 			child.parent = father->off;
@@ -215,21 +222,21 @@ int fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 			child.vstat.st_size = 0;
 
 			if (mode & S_IFREG) {
-				child.data = meta->blcokUsed;
+				child.data = meta->blockUsed;
 				for (j = 0; j < DATA_BLOCK_SET; j++) {
 					struct fs_cache cache;
 					fs_init_cache(&cache);
 					if (j) {
-						cache.prev = meta->blcokUsed - 1;
+						cache.prev = meta->blockUsed - 1;
 					} else {
 						cache.prev = -1;
 					}
 					if (j < DATA_BLOCK_SET - 1) {
-						cache.next = meta->blcokUsed + 1;
+						cache.next = meta->blockUsed + 1;
 					} else {
 						cache.next = -1;
 					}
-					cache.off = meta->blcokUsed++;
+					cache.off = meta->blockUsed++;
 					save_cache(&cache, fd);
 				}
 			}

@@ -1,8 +1,9 @@
 CC := gcc
-CFLAGS := -g -Wall -D_FILE_OFFSET_BITS=64
+CFLAGS := -g -Wall -D_FILE_OFFSET_BITS=64 -lpthread
 OBJS := $(patsubst %.c, %.o, $(wildcard *.c))
+STATIC_LIB := ../mfs/target/release/libmfs.a
 
-LIBS := -lfuse
+LIBS := -lfuse -ldl -lpthread
 
 TARGET := fs
 
@@ -11,7 +12,7 @@ TARGET := fs
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(STATIC_LIB) $(LIBS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

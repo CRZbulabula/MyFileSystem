@@ -14,6 +14,7 @@
 
 #include "node.h"
 #include "cache.h"
+#include "linker.h"
 
 static struct fs_meta meta;
 static FILE* fd;
@@ -436,9 +437,12 @@ void init_fs_meta()
 		printf("data file not exist\n");
 		fd = fopen("/tmp/data", "wb+");
 		printf("data file created\n");
-		meta.blcokUsed = 2;
+		meta.blockUsed = 2;
 		fs_init_inode(&meta.root);
-		save_meta(&meta, fd);
+
+		struct fs_meta* meta0 = (struct fs_meta *) malloc(sizeof(struct fs_meta));
+		//save_meta(&meta, fd);
+		save_meta(meta0, fd);
 		return;
 	}
 
@@ -446,11 +450,14 @@ void init_fs_meta()
 	fd = fopen("/tmp/disk/data", "rb+");
 	fseek(fd, 0, SEEK_SET);
 	fread((void *) &meta, sizeof(struct fs_meta), 1, fd);
-	printf("blockUsed: %d\n", meta.blcokUsed);
+	printf("blockUsed: %d\n", meta.blockUsed);
 }
 
 int main(int argc, char* argv[])
 {
+	//test_rust();
+	printf("stat size: %ld\n", sizeof(struct stat));
+	printf("statvfs size: %ld\n", sizeof(struct statvfs));
 	printf("meta size: %ld\n", sizeof(struct fs_meta));
 	printf("inode size: %ld\n", sizeof(struct fs_inode));
 	printf("cache size: %ld\n", sizeof(struct fs_cache));

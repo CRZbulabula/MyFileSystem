@@ -7,20 +7,23 @@
 #include <unistd.h>
 
 #include "cache.h"
+#include "linker.h"
 
 void read_cache(struct fs_cache *cache, off_t off, FILE* fd)
 {
-	fseek(fd, off * BLOCKSIZE, SEEK_SET);
-	fread((void *) cache, sizeof(struct fs_cache), 1, fd);
+	//fseek(fd, off * BLOCKSIZE, SEEK_SET);
+	//fread((void *) cache, sizeof(struct fs_cache), 1, fd);
+	read_block_at(off, cache);
 	//printf("read cache: %d Block: %d\n", cache->off * BLOCKSIZE, off * BLOCKSIZE);
 }
 
 void save_cache(struct fs_cache* cache, FILE* fd)
 {
 	//printf("save cache Block: %d\n", cache->off * BLOCKSIZE);
-	fseek(fd, cache->off * BLOCKSIZE, SEEK_SET);
-	fwrite((void *) cache, sizeof(struct fs_cache), 1, fd);
-	fflush(fd);
+	//fseek(fd, cache->off * BLOCKSIZE, SEEK_SET);
+	//fwrite((void *) cache, sizeof(struct fs_cache), 1, fd);
+	write_block_at(cache->off, cache);
+	//fflush(fd);
 	//fsync(fd);
 }
 
