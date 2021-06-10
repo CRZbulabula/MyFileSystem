@@ -440,9 +440,9 @@ void init_fs_meta()
 		meta.blockUsed = 2;
 		fs_init_inode(&meta.root);
 
-		struct fs_meta* meta0 = (struct fs_meta *) malloc(sizeof(struct fs_meta));
-		//save_meta(&meta, fd);
-		save_meta(meta0, fd);
+		//struct fs_meta* meta0 = (struct fs_meta *) malloc(sizeof(struct fs_meta));
+		save_meta(&meta, fd);
+		//save_meta(meta0, fd);
 		return;
 	}
 

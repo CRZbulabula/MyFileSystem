@@ -17,7 +17,7 @@ pub extern "C" fn test_(a: u32, b: u32) {
 }
 
 #[no_mangle]
-pub extern "C" fn read_block(block_id: usize, buf: usize) {
+pub extern "C" fn read_block(block_id: usize, buf: *const u8) {
     let orig_buf = unsafe {
         slice::from_raw_parts_mut(buf as *mut u8, NODE_SIZE)
     };

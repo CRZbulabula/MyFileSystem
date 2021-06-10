@@ -16,14 +16,14 @@ struct fs_inode {
 	off_t childOff[MAX_INODE];
 
 	struct stat vstat;
-	//char padding[312];
+	char padding[312];
 };
 
 struct fs_meta {
+	struct statvfs statv;
 	struct fs_inode root;
 	u32 blockUsed;
 
-	struct statvfs statv;
 	//char padding[192];
 };
 
