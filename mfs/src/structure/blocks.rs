@@ -11,7 +11,7 @@ pub struct Superblock {
     pub inode_max: u32,
     pub dnode_max: u32,
     pub root_dir_inode: u32,
-    pub padding: [u8;NODE_SIZE - size_of::<u32>() * 7], //填充满node size
+    padding: [u8;NODE_SIZE - size_of::<u32>() * 7], //填充满node size
 }
 
 impl Superblock {
@@ -75,7 +75,7 @@ impl InodeBitmap {
         for i in 0..=(max_size / 8) {
             for j in 0..8 {
                 let alloc_id = i * 8 + j;
-                if alloc_id < max_size {
+                if alloc_id > max_size {
                     break
                 }
                 if (self.allocated[i] & (1<<j)) != 0 {
@@ -153,7 +153,7 @@ impl DnodeBitmap {
         for i in 0..=(max_size / 8) {
             for j in 0..8 {
                 let alloc_id = i * 8 + j;
-                if alloc_id < max_size {
+                if alloc_id > max_size {
                     break
                 }
                 if (self.allocated[i] & (1<<j)) != 0 {

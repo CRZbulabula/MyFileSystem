@@ -15,11 +15,11 @@ lazy_static! {
 }
 
 pub struct DeviceManager {
-    pub superblock:Superblock,
-    pub inode_bitmap:InodeBitmap,
-    pub dnode_bitmap:DnodeBitmap,
-    pub cached: HashMap<u32, NodeCache>,
-    pub dirty: HashSet<u32>,
+    superblock:Superblock,
+    inode_bitmap:InodeBitmap,
+    dnode_bitmap:DnodeBitmap,
+    cached: HashMap<u32, NodeCache>,
+    dirty: HashSet<u32>,
 }
 
 impl DeviceManager {
@@ -71,7 +71,7 @@ impl DeviceManager {
         }
     }
 
-    pub fn alloc_inode(&mut self) -> isize {
+    fn alloc_inode(&mut self) -> isize {
         let sblk = &self.superblock;
         let id = self.inode_bitmap.alloc((sblk.inode_max - sblk.inode_begin + 1) as usize);
         if id == -1 {
@@ -83,14 +83,14 @@ impl DeviceManager {
         }
     }
 
-    pub fn unalloc_inode(&mut self, node_id:u32) -> isize {
+    fn unalloc_inode(&mut self, node_id:u32) -> isize {
         self.dirty.insert(node_id);
         self.dirty.insert(self.superblock.inode_bitmap);
         println!("[rust] unalloc inode {}", node_id);
         self.inode_bitmap.unalloc(node_id as usize)
     }
 
-    pub fn alloc_dnode(&mut self) -> isize {
+    fn alloc_dnode(&mut self) -> isize {
         let sblk = &self.superblock;
         let id = self.dnode_bitmap.alloc_normal((sblk.dnode_max - sblk.dnode_begin + 1) as usize);
         if id == -1 {
@@ -102,14 +102,14 @@ impl DeviceManager {
         }
     }
 
-    pub fn unalloc_dnode(&mut self, node_id:u32) -> isize {
+    fn unalloc_dnode(&mut self, node_id:u32) -> isize {
         self.dirty.insert(node_id);
         self.dirty.insert(self.superblock.dnode_bitmap);
         println!("[rust] unalloc dnode {}", node_id);
         self.dnode_bitmap.unalloc(node_id as usize)
     }
 
-    pub fn read_block_safe(&mut self, block_id:usize, buf: &mut [u8]) {
+    fn read_block_safe(&mut self, block_id:usize, buf: &mut [u8]) {
         println!("[rust] read node {}", block_id);
         if block_id <= 2 {
             let buf_s = if block_id == 0 {
@@ -144,7 +144,7 @@ impl DeviceManager {
         }
     }
 
-    pub fn write_block_safe(&mut self, block_id:usize, buf: &mut [u8]) { //这里并不真正写入
+    fn write_block_safe(&mut self, block_id:usize, buf: &mut [u8]) { //这里并不真正写入
         println!("[rust] write node {}", block_id);
         self.dirty.insert(block_id as u32); //修改这一页，标记为dirty
         if let Some(node) = self.cached.get_mut(&(block_id as u32)) { //如果已缓存
@@ -160,7 +160,7 @@ impl DeviceManager {
         }
     }
 
-    pub fn fsync(&mut self) {
+    fn fsync(&mut self) {
         println!("[rust] fsync start");
         for cached_node in self.dirty.iter() {
             println!("[rust] fsync update disk node {}", cached_node);
@@ -192,7 +192,7 @@ impl DeviceManager {
         println!("[rust] fsync end");
     }
 
-    pub fn get_root_dir_inode_id(&mut self) -> isize {
+    fn get_root_dir_inode_id(&mut self) -> isize {
         if (self.inode_bitmap.allocated[0] & 1) == 0 {
             self.alloc_inode()
         } else {
