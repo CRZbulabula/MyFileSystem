@@ -14,10 +14,10 @@ lazy_static! {
             .write(true)
             .create(true)
             .open(FILE_SYSTEM_PATH) {
-                println!("[rust] open exist fs");
+                println!("[rvd] open exist fs");
                 try_f
             } else {
-                println!("[rust] create new fs");
+                println!("[rvd] create new fs");
                 File::create(FILE_SYSTEM_PATH).unwrap()
             };
         f.set_len((NODE_SIZE * NODE_NUM_TOTAL) as u64).unwrap();

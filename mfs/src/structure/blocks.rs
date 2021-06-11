@@ -1,6 +1,8 @@
 use super::{STAT_SIZE, STAT_VFS_SIZE, NODE_SIZE, NODE_NUM_TOTAL, NODE_FOR_RECOVERY};
 use std::mem::size_of;
 
+const PADDING_SIZE:usize = NODE_SIZE - size_of::<u32>() * (8+4+NODE_FOR_RECOVERY);
+
 #[derive(Copy, Clone)] //方便存取时类型转换
 pub struct Superblock {
     //pub padding: [u8;STAT_VFS_SIZE],
@@ -11,7 +13,10 @@ pub struct Superblock {
     pub inode_max: u32,
     pub dnode_max: u32,
     pub root_dir_inode: u32,
-    padding: [u8;NODE_SIZE - size_of::<u32>() * 7], //填充满node size
+    pub log_size: u32,
+    pub valid_checksum: u128,
+    pub log_node_id: [u32;NODE_FOR_RECOVERY],
+    padding: [u8;PADDING_SIZE], //填充满node size
 }
 
 impl Superblock {
@@ -23,9 +28,12 @@ impl Superblock {
             inode_begin: 3,
             dnode_begin: 512,
             inode_max: 511, //[3,511]，最多2MB
-            dnode_max: (NODE_NUM_TOTAL-1) as u32, //[512,16383]，最后为8MB
+            dnode_max: (NODE_NUM_TOTAL-NODE_FOR_RECOVERY-1) as u32, //[512,16383-100]，最后为8MB
             root_dir_inode: 3,
-            padding: [0u8;NODE_SIZE - size_of::<u32>() * 7],
+            log_size: 0,
+            valid_checksum: 0,
+            log_node_id: [0u32;NODE_FOR_RECOVERY],
+            padding: [0u8;PADDING_SIZE],
         }
     }
 }
@@ -83,7 +91,7 @@ impl InodeBitmap {
                 }
             };
         };    
-        println!("[rust] inode used: {} / {}", cnt, max_size);
+        println!("[rvd] inode used: {} / {}", cnt, max_size);
     }
 }
 
@@ -117,6 +125,7 @@ impl DnodeBitmap {
         };
         id
     }
+
     pub fn alloc_log(&mut self, begin_size:usize, max_size:usize) -> isize {
         let mut id:isize = -1;
         for i in (begin_size / 8)..=(max_size / 8) {
@@ -161,7 +170,7 @@ impl DnodeBitmap {
                 }
             };
         };    
-        println!("[rust] dnode used: {} / {}", cnt, max_size);
+        println!("[rvd] dnode used: {} / {}", cnt, max_size);
     }
 }
 

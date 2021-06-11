@@ -8,10 +8,14 @@ use std::slice;
 
 use super::{read_block_raw, write_block_raw};
 use super::FILE_SYSTEM_PATH;
-use crate::structure::{Superblock, InodeBitmap, DnodeBitmap, NodeCache, NODE_SIZE};
+use crate::structure::{Superblock, InodeBitmap, DnodeBitmap, NodeCache, NODE_SIZE, NODE_FOR_RECOVERY, NODE_NUM_TOTAL};
 
 lazy_static! {
-    pub static ref DEVICE_MANAGER:Mutex<DeviceManager> = Mutex::new(DeviceManager::new());
+    pub static ref DEVICE_MANAGER:Mutex<DeviceManager> = Mutex::new({
+        let mut dm = DeviceManager::new();
+        dm.recover(); //启动时尝试查找log并恢复
+        dm
+    });
 }
 
 pub struct DeviceManager {
@@ -24,7 +28,7 @@ pub struct DeviceManager {
 
 impl DeviceManager {
     pub fn new() -> Self {
-        println!("[rust] start!");
+        println!("[rvd] start!");
         assert_eq!(size_of::<Superblock>(), NODE_SIZE);
         assert_eq!(size_of::<InodeBitmap>(), NODE_SIZE);
         assert_eq!(size_of::<DnodeBitmap>(), NODE_SIZE);
@@ -78,7 +82,7 @@ impl DeviceManager {
             -1 //空间已满
         } else {
             self.dirty.insert(sblk.inode_bitmap);
-            println!("[rust] alloc inode {}", id + sblk.inode_begin as isize);
+            println!("[rvd] alloc inode {}", id + sblk.inode_begin as isize);
             id + sblk.inode_begin as isize
         }
     }
@@ -86,7 +90,7 @@ impl DeviceManager {
     fn unalloc_inode(&mut self, node_id:u32) -> isize {
         self.dirty.insert(node_id);
         self.dirty.insert(self.superblock.inode_bitmap);
-        println!("[rust] unalloc inode {}", node_id);
+        println!("[rvd] unalloc inode {}", node_id);
         self.inode_bitmap.unalloc(node_id as usize)
     }
 
@@ -97,7 +101,7 @@ impl DeviceManager {
             -1 //空间已满
         } else {
             self.dirty.insert(sblk.dnode_bitmap);
-            println!("[rust] alloc dnode {}", id + sblk.inode_begin as isize);
+            println!("[rvd] alloc dnode {}", id + sblk.inode_begin as isize);
             id + sblk.dnode_begin as isize
         }
     }
@@ -105,12 +109,12 @@ impl DeviceManager {
     fn unalloc_dnode(&mut self, node_id:u32) -> isize {
         self.dirty.insert(node_id);
         self.dirty.insert(self.superblock.dnode_bitmap);
-        println!("[rust] unalloc dnode {}", node_id);
+        println!("[rvd] unalloc dnode {}", node_id);
         self.dnode_bitmap.unalloc(node_id as usize)
     }
 
     fn read_block_safe(&mut self, block_id:usize, buf: &mut [u8]) {
-        println!("[rust] read node {}", block_id);
+        println!("[rvd] read node {}", block_id);
         if block_id <= 2 {
             let buf_s = if block_id == 0 {
                 unsafe {
@@ -145,7 +149,7 @@ impl DeviceManager {
     }
 
     fn write_block_safe(&mut self, block_id:usize, buf: &mut [u8]) { //这里并不真正写入
-        println!("[rust] write node {}", block_id);
+        println!("[rvd] write node {}", block_id);
         self.dirty.insert(block_id as u32); //修改这一页，标记为dirty
         if let Some(node) = self.cached.get_mut(&(block_id as u32)) { //如果已缓存
             for i in 0..NODE_SIZE {
@@ -161,9 +165,23 @@ impl DeviceManager {
     }
 
     fn fsync(&mut self) {
-        println!("[rust] fsync start");
+        println!("[rvd] fsync start");
+        assert_eq!(self.superblock.log_size, 0);
+        let logged = self.dirty.len() < NODE_FOR_RECOVERY / 4;
         for cached_node in self.dirty.iter() {
-            println!("[rust] fsync update disk node {}", cached_node);
+            println!("[rvd] fsync update disk node {}", cached_node);
+            if logged {
+                let log_node_at = NODE_NUM_TOTAL - NODE_FOR_RECOVERY + self.superblock.log_size as usize;
+                self.superblock.log_node_id[self.superblock.log_size as usize] = *cached_node;
+                let mut orig_data = [0u8;NODE_SIZE];
+                read_block_raw(*cached_node as usize, &mut orig_data).unwrap();
+                unsafe {
+                *((&orig_data[NODE_SIZE - 4])  as *const _ as *mut u32) = *cached_node;
+                }
+                write_block_raw(log_node_at, &mut orig_data).unwrap();
+                println!("[rvd] node {} logged", *cached_node);
+                self.superblock.log_size += 1;
+            }
             if cached_node <= &2 { //是superblock / bitset
                 let mut buf_s = if cached_node == &0 {
                     unsafe {
@@ -189,7 +207,17 @@ impl DeviceManager {
             }
         }
         self.dirty.clear(); //清空脏页
-        println!("[rust] fsync end");
+        if logged {
+            let log_node_at = NODE_NUM_TOTAL - NODE_FOR_RECOVERY;
+            self.superblock.log_size = 0;
+            let mut orig_data = [0u8;NODE_SIZE];
+            for i in 0..NODE_SIZE  {
+                orig_data[i] = MAGIC_BARRIER[i % 4];
+            };
+            write_block_raw(log_node_at, &mut orig_data).unwrap();
+            println!("[rvd] log committed.");
+        }
+        println!("[rvd] fsync end");
     }
 
     fn get_root_dir_inode_id(&mut self) -> isize {
@@ -199,7 +227,45 @@ impl DeviceManager {
             self.superblock.inode_begin as isize
         }
     }
+
+    fn recover(&mut self) -> i32 {
+        println!("[rvd] recover start");
+        let log_node_at = NODE_NUM_TOTAL - NODE_FOR_RECOVERY;
+        let mut orig_data = [0u8;NODE_SIZE];
+        read_block_raw(log_node_at, &mut orig_data).unwrap();
+        let mut log_exist = false;
+        for i in 0..NODE_SIZE {
+            if orig_data[i] != MAGIC_BARRIER[i % 4] || orig_data[i] != 1u8 {
+                //println!("err {} {}", orig_data[i], i);
+                log_exist = true;
+                break;
+            }
+        };
+        let ret = if !log_exist {
+            for log_id in log_node_at..log_node_at + NODE_FOR_RECOVERY {
+                read_block_raw(log_id, &mut orig_data).unwrap();
+                let cached_node: u32;
+                unsafe {
+                    cached_node = *((&orig_data[NODE_SIZE - 4])  as *const _ as *mut u32);
+                    *((&orig_data[NODE_SIZE - 4])  as *const _ as *mut u32) = 0u32;
+                }
+                write_block_raw(cached_node as usize, &mut orig_data).unwrap();
+            }
+            if log_node_at + self.superblock.log_size as usize >= NODE_NUM_TOTAL {
+                self.dnode_bitmap.alloc_log(self.superblock.dnode_max as usize, NODE_NUM_TOTAL - self.superblock.dnode_max as usize + 1);
+            }
+            println!("[rvd] recovered");
+            -1
+        } else {
+            println!("[rvd] log is clean.");
+            0
+        };
+        println!("[rvd] recover end");
+        ret
+    }
 }
+
+const MAGIC_BARRIER:[u8;4] = [27u8, 119u8, 7u8, 69u8];
 
 pub fn check_file_system_existed() -> i32 {
     if let Ok(_f) = File::open(FILE_SYSTEM_PATH) {
