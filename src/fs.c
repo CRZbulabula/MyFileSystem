@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <error.h>
 #include <fuse.h>
 #include <sys/file.h>
@@ -152,6 +153,8 @@ static int fs_rmdir(const char *path)
 	} else {
 		save_meta(&meta, fd);
 	}
+
+	fs_delete_file(inode, fd);
 	fsync_rust();
 	return 0;
 }
@@ -205,6 +208,9 @@ static int fs_unlink(const char *path)
 	} else {
 		save_meta(&meta, fd);
 	}
+
+	fs_delete_file(inode, fd);
+	fsync_rust();
 	return 0;
 }
 

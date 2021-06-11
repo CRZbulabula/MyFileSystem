@@ -69,7 +69,7 @@ void save_inode(struct fs_inode *inode, FILE* fd)
 void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, FILE* fd)
 {
 	int cur_id = 0;
-	int start_id = off / BLOCKSIZE;
+	int start_id = off / MAX_DATA;
 	while (cur_id < start_id) {
 		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
 		read_cache(next, cache->next, fd);
@@ -82,15 +82,15 @@ void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, 
 void fs_read_file(struct fs_cache* cache, char *buf, size_t size, off_t off, FILE* fd)
 {
 	off_t off_sum = 0;
-	off_t start_off = off % BLOCKSIZE;
+	off_t start_off = off % MAX_DATA;
 	size_t size_res = size;
 	while (size_res) {
-		size_t size_read = BLOCKSIZE - start_off;
+		size_t size_read = MAX_DATA - start_off;
 		if (size_read > size_res) {
 			size_read = size_res;
 		}
 
-		strncpy(buf, cache->data + start_off, size_read);
+		strncpy(buf + off_sum, cache->data + start_off, size_read);
 		size_res -= size_read;
 		off_sum += size_read;
 		start_off = 0;
@@ -106,10 +106,10 @@ void fs_write_file(struct fs_cache* cache, const char *buf, size_t size, off_t o
 {
 	int write_block_cnt = 0;
 	off_t off_sum = 0;
-	off_t start_off = off % BLOCKSIZE;
+	off_t start_off = off % MAX_DATA;
 	size_t size_res = size;
 	while (size_res) {
-		size_t size_fill = BLOCKSIZE - start_off;
+		size_t size_fill = MAX_DATA - start_off;
 		if (size_fill > size_res) {
 			size_fill = size_res;
 		}
@@ -123,10 +123,53 @@ void fs_write_file(struct fs_cache* cache, const char *buf, size_t size, off_t o
 		save_cache(cache, fd);
 
 		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
-		read_cache(next, cache->next, fd);
+		if (cache->next != -1) {
+			read_cache(next, cache->next, fd);
+		} else {
+			int new_cache_off = alloc_dnode();
+			cache->next = new_cache_off;
+
+			fs_init_cache(next);
+			next->prev = cache->off;
+			next->off = new_cache_off;
+			next->next = -1;
+		}
 		free(cache);
 		cache = next;
 	}
+}
+
+void fs_delete_file(struct fs_inode* inode, FILE* fd)
+{
+	int i;
+
+	if (inode->data != -1) {
+		struct fs_cache* cache = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+		read_cache(cache, inode->data, fd);
+		while (1) {
+			printf("free cache: %ld %ld\n", cache->off, cache->next);
+			unalloc_dnode(cache->off);
+			if (cache->next == -1) {
+				break;
+			}
+
+			struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+			read_cache(next, cache->next, fd);
+			free(cache);
+			cache = next;
+		}
+	}
+
+	for (i = 0; i < MAX_INODE; i++) {
+		if (inode->childOff[i] != -1) {
+			struct fs_inode* next = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+			fs_init_inode(next);
+			fs_delete_file(next, fd);
+		}
+	}
+
+	printf("free inode: %s", inode->path);
+	unalloc_inode(inode->off);
 }
 
 void fs_init_inode(struct fs_inode* inode)
@@ -134,7 +177,7 @@ void fs_init_inode(struct fs_inode* inode)
 	bzero(inode->path, sizeof(inode->path));
 	bzero(inode->childPath, sizeof(inode->childPath));
 	memset(inode->childOff, -1, sizeof(inode->childOff));
-	inode->off = inode->parent = -1;
+	inode->off = inode->parent = inode->data = -1;
 }
 
 struct fs_inode* fs_search_file(struct fs_meta *meta, char *path, FILE* fd)
@@ -241,7 +284,10 @@ int fs_create_file(struct fs_meta *meta, char *path, mode_t mode, FILE* fd)
 					}
 					cache.off = alloced_now;
 					alloced_last = alloced_now;
-					alloced_now = alloc_dnode();
+					if (j < DATA_BLOCK_SET - 1) {
+						alloced_now = alloc_dnode();
+					}
+					printf("%ld %ld\n", cache.off, cache.next);
 					save_cache(&cache, fd);
 				}
 			}

@@ -38,6 +38,7 @@ int fs_create_file(struct fs_meta* meta, char* path, mode_t mode, FILE* fd);
 void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, FILE* fd);
 void fs_read_file(struct fs_cache* cache, char *buf, size_t size, off_t off, FILE* fd);
 void fs_write_file(struct fs_cache* cache, const char *buf, size_t size, off_t off, FILE* fd);
+void fs_delete_file(struct fs_inode* inode, FILE* fd);
 
 void fs_update_time(struct fs_inode* inode, int which);
 
