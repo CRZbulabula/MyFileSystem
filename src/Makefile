@@ -3,7 +3,7 @@ CFLAGS := -g -Wall -D_FILE_OFFSET_BITS=64 -lpthread
 OBJS := $(patsubst %.c, %.o, $(wildcard *.c))
 STATIC_LIB := ../mfs/target/release/libmfs.a
 
-LIBS := -lfuse -ldl -lpthread
+LIBS := -lfuse -ldl -lpthread -lm
 
 TARGET := fs
 

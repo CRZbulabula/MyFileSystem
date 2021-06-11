@@ -1,8 +1,10 @@
 const FILE_SYSTEM_PATH: &str = "./file_system";
 
+mod disk_crypto;
 mod fs_file;
 mod manager;
 
+use disk_crypto::{BLOCK_CRYPTOR};
 use fs_file::*;
 //use manager::*;
 

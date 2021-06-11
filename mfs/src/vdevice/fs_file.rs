@@ -4,7 +4,7 @@ use std::io::{self, Error, ErrorKind, Write, Read, Seek, SeekFrom};
 use lazy_static::*;
 
 use crate::structure::{NODE_SIZE, NODE_NUM_TOTAL};
-use super::FILE_SYSTEM_PATH;
+use super::{FILE_SYSTEM_PATH, BLOCK_CRYPTOR};
 
 
 lazy_static! {
@@ -34,7 +34,10 @@ pub fn read_block_raw(block_id:usize, buf: &mut [u8]) -> io::Result<()> {
     //print_type_of(&DEVICE_FILE);
     let mut file = DEVICE_FILE.lock().unwrap();
     file.seek(SeekFrom::Start((block_id * NODE_SIZE) as u64)).unwrap();
-    let read_size = file.read(buf).unwrap();
+    //let read_size = file.read(buf).unwrap();
+    let mut cryptor = BLOCK_CRYPTOR.lock().unwrap();
+    let read_size = file.read(&mut cryptor.buf).unwrap();
+    cryptor.decrypt(buf);
     if read_size == NODE_SIZE {
         Ok(())
     } else {
@@ -47,7 +50,9 @@ pub fn write_block_raw(block_id:usize, buf: &mut [u8]) -> io::Result<()> {
     let mut file = DEVICE_FILE.lock().unwrap();
     file.seek(SeekFrom::Start((block_id * NODE_SIZE) as u64)).unwrap();
     //unsafe {println!("write buf addr {}", buf.as_ptr() as usize);}
-    let write_size = file.write(buf).unwrap();
+    let mut cryptor = BLOCK_CRYPTOR.lock().unwrap();
+    cryptor.encrypt(buf);
+    let write_size = file.write(&cryptor.buf).unwrap();
     if write_size == NODE_SIZE {
         Ok(())
     } else {
