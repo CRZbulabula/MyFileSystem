@@ -66,8 +66,39 @@ void save_inode(struct fs_inode *inode, FILE* fd)
 	//fsync(fd);
 }
 
-void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, FILE* fd)
+void fs_alloc_cache(struct fs_inode* inode, size_t new_size, FILE* fd)
 {
+	struct fs_cache* cache = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+	read_cache(cache, inode->data, fd);
+
+	size_t cur_size = MAX_DATA;
+	while (cur_size < new_size) {
+		cur_size += MAX_DATA;
+		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+		if (cache->next != -1) {
+			read_cache(next, cache->next, fd);
+		} else {
+			int new_cache_off = alloc_dnode();
+			cache->next = new_cache_off;
+
+			fs_init_cache(next);
+			next->prev = cache->off;
+			next->off = new_cache_off;
+			next->next = -1;
+
+			save_cache(cache, fd);
+			save_cache(next, fd);
+		}
+		free(cache);
+		cache = next;
+	}
+}
+
+struct fs_cache* fs_locate_cache(struct fs_inode* inode, off_t off, FILE* fd)
+{
+	struct fs_cache* cache = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+	read_cache(cache, inode->data, fd);
+
 	int cur_id = 0;
 	int start_id = off / MAX_DATA;
 	while (cur_id < start_id) {
@@ -77,6 +108,8 @@ void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, 
 		cache = next;
 		cur_id++;
 	}
+
+	return cache;
 }
 
 void fs_read_file(struct fs_cache* cache, char *buf, size_t size, off_t off, FILE* fd)
@@ -94,6 +127,10 @@ void fs_read_file(struct fs_cache* cache, char *buf, size_t size, off_t off, FIL
 		size_res -= size_read;
 		off_sum += size_read;
 		start_off = 0;
+
+		if (!size_res) {
+			break;
+		}
 
 		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
 		read_cache(next, cache->next, fd);
@@ -118,22 +155,15 @@ void fs_write_file(struct fs_cache* cache, const char *buf, size_t size, off_t o
 		size_res -= size_fill;
 		off_sum += size_fill;
 		start_off = 0;
-		printf("write block cnt: %d\n", write_block_cnt);
 		write_block_cnt++;
 		save_cache(cache, fd);
 
-		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
-		if (cache->next != -1) {
-			read_cache(next, cache->next, fd);
-		} else {
-			int new_cache_off = alloc_dnode();
-			cache->next = new_cache_off;
-
-			fs_init_cache(next);
-			next->prev = cache->off;
-			next->off = new_cache_off;
-			next->next = -1;
+		if (!size_res) {
+			break;
 		}
+
+		struct fs_cache* next = (struct fs_cache*) malloc(sizeof(struct fs_cache));
+		read_cache(next, cache->next, fd);
 		free(cache);
 		cache = next;
 	}

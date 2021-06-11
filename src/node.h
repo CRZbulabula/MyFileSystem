@@ -35,7 +35,8 @@ void fs_init_inode(struct fs_inode* inode);
 struct fs_inode* fs_search_file(struct fs_meta* meta, char* path, FILE* fd);
 int fs_create_file(struct fs_meta* meta, char* path, mode_t mode, FILE* fd);
 
-void fs_locate_cache(struct fs_inode* inode, struct fs_cache* cache, off_t off, FILE* fd);
+void fs_alloc_cache(struct fs_inode* inode, size_t new_size, FILE* fd);
+struct fs_cache* fs_locate_cache(struct fs_inode* inode, off_t off, FILE* fd);
 void fs_read_file(struct fs_cache* cache, char *buf, size_t size, off_t off, FILE* fd);
 void fs_write_file(struct fs_cache* cache, const char *buf, size_t size, off_t off, FILE* fd);
 void fs_delete_file(struct fs_inode* inode, FILE* fd);
