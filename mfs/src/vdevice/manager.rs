@@ -169,7 +169,6 @@ impl DeviceManager {
         assert_eq!(self.superblock.log_size, 0);
         let logged = self.dirty.len() < NODE_FOR_RECOVERY / 4;
         for cached_node in self.dirty.iter() {
-            println!("[rvd] fsync update disk node {}", cached_node);
             if logged {
                 let log_node_at = NODE_NUM_TOTAL - NODE_FOR_RECOVERY + self.superblock.log_size as usize;
                 self.superblock.log_node_id[self.superblock.log_size as usize] = *cached_node;
@@ -182,6 +181,7 @@ impl DeviceManager {
                 println!("[rvd] node {} logged", *cached_node);
                 self.superblock.log_size += 1;
             }
+            println!("[rvd] fsync update disk node {}", cached_node);
             if cached_node <= &2 { //是superblock / bitset
                 let mut buf_s = if cached_node == &0 {
                     unsafe {
