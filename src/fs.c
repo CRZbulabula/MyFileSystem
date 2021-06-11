@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <error.h>
 #include <fuse.h>
 #include <sys/file.h>
@@ -152,6 +153,8 @@ static int fs_rmdir(const char *path)
 	} else {
 		save_meta(&meta, fd);
 	}
+
+	fs_delete_file(inode, fd);
 	fsync_rust();
 	return 0;
 }
@@ -205,6 +208,9 @@ static int fs_unlink(const char *path)
 	} else {
 		save_meta(&meta, fd);
 	}
+
+	fs_delete_file(inode, fd);
+	fsync_rust();
 	return 0;
 }
 
@@ -334,16 +340,15 @@ static int fs_read(const char *path,
 		return 0;
 	}
 
-	struct fs_cache* cache = (struct fs_cache*) malloc(sizeof(struct fs_cache));
-	read_cache(cache, inode->data, fd);
-	fs_locate_cache(inode, cache, offset, fd);
-
+	struct fs_cache* cache = fs_locate_cache(inode, offset, fd);
+	printf("%ld %ld %ld\n", offset, size, inode->vstat.st_size);
 	if (offset + size > inode->vstat.st_size) {
 		size = inode->vstat.st_size - offset;
+		printf("%ld %ld %ld\n", offset, size, inode->vstat.st_size);
 	}
 
 	char* resBuf = (char*) malloc(size + 1);
-	resBuf[size + 1] = '\0';
+	resBuf[size] = '\0';
 	fs_read_file(cache, resBuf, size, offset, fd);
 	printf("fs_read: %s, size: %ld, off: %lld, res: %s\n", path, size, offset, resBuf);
 
@@ -371,14 +376,15 @@ static int fs_write(const char *path,
 		return -2;
 	}
 
-	struct fs_cache* cache = (struct fs_cache*) malloc(sizeof(struct fs_cache));
-	read_cache(cache, inode->data, fd);
-	fs_locate_cache(inode, cache, offset, fd);
-	fs_write_file(cache, buf, size, offset, fd);
-
 	if (offset + size > inode->vstat.st_size) {
 		inode->vstat.st_size = offset + size;
+		fs_alloc_cache(inode, offset + size, fd);
 	}
+
+	struct fs_cache* cache = fs_locate_cache(inode, offset, fd);
+	printf("off: %ld %ld\n", cache->off, cache->next);
+	fs_write_file(cache, buf, size, offset, fd);
+
 	fs_update_time(inode, U_ALL);
 	save_inode(inode, fd);
 	fsync_rust();
@@ -392,6 +398,7 @@ static int fs_write(const char *path,
  */
 static int fs_truncate(const char* path, off_t off, struct fuse_file_info* fi)
 {
+	printf("%s: %s, %ld\n", __FUNCTION__, path, off);
 	return 0;
 }
 
@@ -400,6 +407,7 @@ static int fs_truncate(const char* path, off_t off, struct fuse_file_info* fi)
  */
 static int fs_utimens(const char* path, const struct timespec tv[2], struct fuse_file_info* fi)
 {
+	printf("%s: %s\n", __FUNCTION__, path);
 	return 0;
 }
 
@@ -408,6 +416,7 @@ static int fs_utimens(const char* path, const struct timespec tv[2], struct fuse
  */
 static int fs_chown(const char* path, uid_t u, gid_t g, struct fuse_file_info* fi)
 {
+	printf("%s: %s\n", __FUNCTION__, path);
 	return 0;
 }
 
